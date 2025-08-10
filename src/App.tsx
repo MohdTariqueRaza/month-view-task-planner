@@ -39,7 +39,7 @@ function App() {
     null
   );
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [draggedTask, setDraggedTask] = useState<Task | null>(null);
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [showTaskForm, setShowTaskForm] = useState<boolean>(false);
   const [selectionRange, setSelectionRange] = useState<SelectionRange>({
     start: null,
@@ -70,35 +70,47 @@ function App() {
   }, [tasks]);
 
   const handleDragStart = (task: Task) => {
-    setDraggedTask(task);
+    setDraggedTaskId(task.id);
   };
 
   const handleDrop = (date: Date) => {
-    if (draggedTask) {
-      const dropDate = createLocalDate(date);
-      const originalStart = parseDateString(draggedTask.startDate);
+    if (draggedTaskId) {
+      const draggedTask = tasks.find((t) => t.id === draggedTaskId);
+      if (draggedTask) {
+        const dropDate = createLocalDate(date);
+        const originalStart = parseDateString(draggedTask.startDate);
 
-      const diffInDays = Math.round(
-        (dropDate.getTime() - originalStart.getTime()) / (1000 * 60 * 60 * 24)
-      );
+        // Calculate day difference
+        const diffInDays = Math.round(
+          (dropDate.getTime() - originalStart.getTime()) / (1000 * 60 * 60 * 24)
+        );
 
-      const originalEnd = parseDateString(draggedTask.endDate);
-      const newStart = new Date(originalStart);
-      newStart.setDate(originalStart.getDate() + diffInDays);
-      const newEnd = new Date(originalEnd);
-      newEnd.setDate(originalEnd.getDate() + diffInDays);
+        // Calculate new dates
+        const newStart = new Date(originalStart);
+        newStart.setDate(originalStart.getDate() + diffInDays);
 
-      const updatedTasks = tasks.map((task) =>
-        task.id === draggedTask.id
-          ? {
-              ...task,
-              startDate: formatDateString(newStart),
-              endDate: formatDateString(newEnd),
-            }
-          : task
-      );
-      setTasks(updatedTasks);
-      setDraggedTask(null);
+        const originalEnd = parseDateString(draggedTask.endDate);
+        const duration = Math.round(
+          (originalEnd.getTime() - originalStart.getTime()) /
+            (1000 * 60 * 60 * 24)
+        );
+        const newEnd = new Date(newStart);
+        newEnd.setDate(newStart.getDate() + duration);
+
+        // Update task
+        const updatedTasks = tasks.map((task) =>
+          task.id === draggedTaskId
+            ? {
+                ...task,
+                startDate: formatDateString(newStart),
+                endDate: formatDateString(newEnd),
+              }
+            : task
+        );
+
+        setTasks(updatedTasks);
+      }
+      setDraggedTaskId(null);
     }
   };
 
