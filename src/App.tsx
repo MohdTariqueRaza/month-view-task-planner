@@ -1,4 +1,3 @@
-// src/App.tsx
 import { useState, useEffect } from "react";
 import Calendar from "./components/Calendar";
 import TaskForm from "./components/TaskForm";
@@ -14,10 +13,7 @@ interface SelectionRange {
 function App() {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const savedTasks = localStorage.getItem("tasks");
-    return savedTasks ? JSON.parse(savedTasks) : [];
-  });
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   const [selectedCategory, setSelectedCategory] = useState<string[]>([]);
   const [selectedTimeFilter, setSelectedTimeFilter] = useState<string | null>(
@@ -36,7 +32,18 @@ function App() {
 
   // Save tasks to localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(tasks));
+    if (typeof window !== "undefined") {
+      const savedTasks = localStorage.getItem("tasks");
+      if (savedTasks) {
+        setTasks(JSON.parse(savedTasks));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("tasks", JSON.stringify(tasks));
+    }
   }, [tasks]);
 
   // Handle drag start
