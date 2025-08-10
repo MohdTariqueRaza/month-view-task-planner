@@ -52,6 +52,7 @@ const TaskForm: React.FC<TaskFormProps> = ({
   }, [task, range]);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    console.log(task, "tsaks");
     e.preventDefault();
     onSubmit({
       id: String(task?.id),

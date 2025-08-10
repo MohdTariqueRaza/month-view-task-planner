@@ -10,11 +10,30 @@ interface SelectionRange {
   end: Date | null;
 }
 
+// Create date without time components in local timezone
+const createLocalDate = (date: Date): Date => {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+};
+
+// Format date to YYYY-MM-DD for consistent storage
+const formatDateString = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+// Parse formatted date string to local date
+const parseDateString = (dateStr: string): Date => {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+
 function App() {
-  const [currentDate, setCurrentDate] = useState<Date>(new Date());
-
+  const [currentDate, setCurrentDate] = useState<Date>(
+    createLocalDate(new Date())
+  );
   const [tasks, setTasks] = useState<Task[]>([]);
-
   const [selectedCategory, setSelectedCategory] = useState<string[]>([]);
   const [selectedTimeFilter, setSelectedTimeFilter] = useState<string | null>(
     null
@@ -27,15 +46,19 @@ function App() {
     end: null,
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // Save tasks to localStorage whenever they change
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedTasks = localStorage.getItem("tasks");
       if (savedTasks) {
-        setTasks(JSON.parse(savedTasks));
+        const parsedTasks = JSON.parse(savedTasks);
+        const tasksWithDates = parsedTasks.map((task: Task) => ({
+          ...task,
+          startDate: formatDateString(new Date(task.startDate)),
+          endDate: formatDateString(new Date(task.endDate)),
+        }));
+        setTasks(tasksWithDates);
       }
     }
   }, []);
@@ -46,26 +69,22 @@ function App() {
     }
   }, [tasks]);
 
-  // Handle drag start
   const handleDragStart = (task: Task) => {
     setDraggedTask(task);
   };
 
-  // Handle drop on a date
   const handleDrop = (date: Date) => {
     if (draggedTask) {
-      const originalStart = new Date(draggedTask.startDate);
-      const dropDate = new Date(date);
+      const dropDate = createLocalDate(date);
+      const originalStart = parseDateString(draggedTask.startDate);
 
-      // Calculate difference in days
       const diffInDays = Math.round(
         (dropDate.getTime() - originalStart.getTime()) / (1000 * 60 * 60 * 24)
       );
 
-      const originalEnd = new Date(draggedTask.endDate);
+      const originalEnd = parseDateString(draggedTask.endDate);
       const newStart = new Date(originalStart);
       newStart.setDate(originalStart.getDate() + diffInDays);
-
       const newEnd = new Date(originalEnd);
       newEnd.setDate(originalEnd.getDate() + diffInDays);
 
@@ -73,8 +92,8 @@ function App() {
         task.id === draggedTask.id
           ? {
               ...task,
-              startDate: newStart.toISOString(),
-              endDate: newEnd.toISOString(),
+              startDate: formatDateString(newStart),
+              endDate: formatDateString(newEnd),
             }
           : task
       );
@@ -83,7 +102,6 @@ function App() {
     }
   };
 
-  // Handle task resize
   const handleResizeTask = (
     taskId: string,
     newStartDate: string,
@@ -92,95 +110,128 @@ function App() {
     setTasks(
       tasks.map((task) =>
         task.id === taskId
-          ? { ...task, startDate: newStartDate, endDate: newEndDate }
+          ? {
+              ...task,
+              startDate: newStartDate,
+              endDate: newEndDate,
+            }
           : task
       )
     );
   };
 
-  // Add or update a task
   const handleTaskSubmit = (task: Task) => {
-    if (task.id) {
+    if (task.id && task.id !== "undefined") {
       // Update existing task
-      setTasks(tasks.map((t) => (t.id === task.id ? task : t)));
-    } else {
-      // Add new task
-      const newTask = {
+      const updatedTask = {
         ...task,
-        id: Date.now().toString(),
+        startDate: formatDateString(new Date(task.startDate)),
+        endDate: formatDateString(new Date(task.endDate)),
       };
-      setTasks([...tasks, newTask]);
+
+      setTasks((prevTasks) =>
+        prevTasks.map((t) => (t.id === task.id ? updatedTask : t))
+      );
+      setSelectedTask(updatedTask);
+    } else {
+      // Create new task
+      const start = selectionRange.start
+        ? createLocalDate(selectionRange.start)
+        : createLocalDate(new Date());
+      const end = selectionRange.end
+        ? createLocalDate(selectionRange.end)
+        : start;
+
+      const newTask: Task = {
+        ...task,
+        id: `task-${Date.now()}`,
+        category: task.category || "Uncategorized",
+        startDate: formatDateString(start),
+        endDate: formatDateString(end),
+      };
+
+      setTasks((prevTasks) => [...prevTasks, newTask]);
+      setSelectedTask(newTask);
+
+      // Reset filters and search
+      setSelectedTimeFilter(null);
+      setSearchQuery("");
+      setSelectedCategory([]);
+
+      // Set calendar view to task's start date
+      setCurrentDate(start);
     }
     setShowTaskForm(false);
-    setSelectedTask(null);
     setSelectionRange({ start: null, end: null });
   };
 
-  // Delete a task
   const handleDeleteTask = (taskId: string | number) => {
     setTasks(tasks.filter((task) => task.id !== taskId));
     setSelectedTask(null);
     setShowTaskForm(false);
   };
 
-  // Start selection range
   const startSelection = (date: Date) => {
-    setSelectionRange({ start: date, end: date });
+    const normalized = createLocalDate(date);
+    setSelectionRange({ start: normalized, end: normalized });
   };
 
-  // Update selection range
   const updateSelection = (date: Date) => {
     if (selectionRange.start) {
       setSelectionRange((prev) => ({
         start: prev.start,
-        end: date,
+        end: createLocalDate(date),
       }));
     }
   };
 
-  // End selection and open form
   const endSelection = () => {
     if (selectionRange.start && selectionRange.end) {
-      // Ensure start is before end
-      const start = new Date(selectionRange.start);
-      const end = new Date(selectionRange.end);
+      let start = createLocalDate(selectionRange.start);
+      let end = createLocalDate(selectionRange.end);
 
+      // Ensure start is before end
       if (start > end) {
-        setSelectionRange({ start: end, end: start });
+        [start, end] = [end, start];
       }
 
+      setSelectedTask(null);
       setShowTaskForm(true);
     }
   };
 
-  // Filter tasks based on current filters
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
+    setShowTaskForm(true);
+  };
+
   const filteredTasks = tasks.filter((task) => {
+    const taskStart = parseDateString(task.startDate);
+    const taskEnd = parseDateString(task.endDate);
+    const today = createLocalDate(new Date());
+
     // Category filter
     if (
       selectedCategory.length > 0 &&
-      !selectedCategory.includes(task.category)
+      !selectedCategory.includes(task.category || "Uncategorized")
     ) {
       return false;
     }
 
     // Time filter
     if (selectedTimeFilter) {
-      const today = new Date();
       const days = parseInt(selectedTimeFilter);
-      const futureDate = new Date();
+      const futureDate = new Date(today);
       futureDate.setDate(today.getDate() + days);
 
-      const taskStart = new Date(task.startDate);
-      const taskEnd = new Date(task.endDate);
-
-      // Check if task overlaps with the filter period
       return taskStart <= futureDate && taskEnd >= today;
     }
 
     // Search filter
     if (
       searchQuery &&
-      !task.title.toLowerCase().includes(searchQuery.toLowerCase())
+      !task.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
+      !task.description?.toLowerCase().includes(searchQuery.toLowerCase())
     ) {
       return false;
     }
@@ -188,14 +239,12 @@ function App() {
     return true;
   });
 
-  // Navigate to next month
   const nextMonth = () => {
     setCurrentDate(
       new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
     );
   };
 
-  // Navigate to previous month
   const prevMonth = () => {
     setCurrentDate(
       new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
@@ -222,7 +271,7 @@ function App() {
                 placeholder="Search tasks..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="px-3 py-2 rounded border border-gray-300 text-white shadow-sm
+                className="px-3 py-2 rounded border border-gray-300 text-black shadow-sm
              focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500
              placeholder-gray-400"
               />
@@ -234,7 +283,7 @@ function App() {
                 &larr; Prev
               </button>
               <button
-                onClick={() => setCurrentDate(new Date())}
+                onClick={() => setCurrentDate(createLocalDate(new Date()))}
                 className="px-3 py-1 bg-indigo-700 rounded-md hover:bg-indigo-800 focus:outline-none"
               >
                 Today
@@ -263,12 +312,16 @@ function App() {
         <main className="flex-1 overflow-auto p-4">
           <Calendar
             currentDate={currentDate}
-            tasks={filteredTasks}
+            tasks={filteredTasks.map((task) => ({
+              ...task,
+              startDate: parseDateString(task.startDate).toISOString(),
+              endDate: parseDateString(task.endDate).toISOString(),
+            }))}
             selectionRange={selectionRange}
             onStartSelection={startSelection}
             onUpdateSelection={updateSelection}
             onEndSelection={endSelection}
-            onTaskClick={setSelectedTask}
+            onTaskClick={handleTaskClick}
             onDragStart={handleDragStart}
             onDrop={handleDrop}
             onResizeTask={handleResizeTask}
