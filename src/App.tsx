@@ -210,6 +210,16 @@ function App() {
               <h1 className="text-2xl font-bold">Task Planner</h1>
             </div>
             <div className="mt-2 flex md:mt-0 space-x-2">
+              <input
+                type="text"
+                placeholder="Search tasks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="px-3 py-2 rounded border border-gray-300 text-white shadow-sm
+             focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500
+             placeholder-gray-400"
+              />
+
               <button
                 onClick={prevMonth}
                 className="px-3 py-1 bg-indigo-700 rounded-md hover:bg-indigo-800 focus:outline-none"
